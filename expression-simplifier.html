@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>reduce() — integer expression simplifier</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --bg: #14161c;
+    --panel: #1b1e26;
+    --panel-raised: #21252f;
+    --line: #2c313d;
+    --text: #e7e5df;
+    --text-dim: #9199a8;
+    --text-faint: #5c6472;
+    --gold: #d4a24c;
+    --teal: #4fc7ac;
+    --violet: #9d90e0;
+    --error: #e0685f;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono{ font-family: 'JetBrains Mono', monospace; }
+
+  .wrap{
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ---- header ---- */
+  .eyebrow{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .eyebrow::before{ content: "// "; color: var(--violet); }
+
+  h1{
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 34px;
+    line-height: 1.15;
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+  h1 .fn{ color: var(--teal); }
+  h1 .paren{ color: var(--text-faint); }
+
+  .sub{
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.55;
+    max-width: 54ch;
+    margin-bottom: 34px;
+  }
+
+  /* ---- input console ---- */
+  .console{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
+  }
+  .console .prompt{
+    color: var(--gold);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    padding-left: 14px;
+    user-select: none;
+  }
+  .console input{
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px;
+    padding: 14px 4px;
+  }
+  .console input::placeholder{ color: var(--text-faint); }
+  .console button{
+    background: var(--teal);
+    color: #0d1310;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    padding: 12px 20px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+    white-space: nowrap;
+  }
+  .console button:hover{ background: #63d4bb; }
+  .console button:active{ transform: scale(0.97); }
+  .console button:disabled{ background: var(--line); color: var(--text-faint); cursor: default; }
+
+  .examples{
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .examples span{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+  .examples span:hover{ border-color: var(--violet); color: var(--text); }
+
+  .error-box{
+    margin-top: 18px;
+    border: 1px solid var(--error);
+    background: rgba(224,104,95,0.08);
+    color: var(--error);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 8px;
+  }
+
+  /* ---- ladder ---- */
+  .ladder{
+    margin-top: 44px;
+    position: relative;
+  }
+  .rung{
+    position: relative;
+    padding-left: 34px;
+    padding-bottom: 30px;
+  }
+  .rung::before{ /* connecting line */
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 22px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--line);
+  }
+  .rung:last-child::before{ display: none; }
+  .rung::after{ /* node dot */
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 8px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 2px solid var(--violet);
+  }
+  .rung.final::after{ border-color: var(--teal); background: var(--teal); }
+
+  .rule{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--violet);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .rung.final .rule{ color: var(--teal); }
+
+  .expr-card{
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 16px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+    word-break: break-word;
+  }
+  .rung.final .expr-card{
+    border-color: var(--teal);
+    box-shadow: 0 0 0 1px rgba(79,199,172,0.25);
+  }
+  .expr-card mark{
+    background: rgba(212,162,76,0.18);
+    color: var(--gold);
+    border-radius: 4px;
+    padding: 1px 3px;
+    font-weight: 700;
+  }
+  .rung.final .expr-card mark{
+    background: rgba(79,199,172,0.16);
+    color: var(--teal);
+  }
+
+  .note{
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  .result-badge{
+    display: inline-block;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: #0d1310;
+    background: var(--teal);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+
+  /* ---- loading ---- */
+  .loading{
+    margin-top: 44px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .spinner{
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    border-top-color: var(--teal);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  footer{
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--text-faint);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .spinner{ animation: none; }
+    .console button{ transition: none; }
+  }
+
+  @media (max-width: 480px){
+    h1{ font-size: 26px; }
+    .console{ flex-wrap: wrap; }
+    .console .prompt{ padding-left: 10px; }
+    .console button{ margin: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">integer arithmetic, reduced to first principles</div>
+  <h1><span class="paren">reduce(</span><span class="fn">expr</span><span class="paren">)</span></h1>
+  <div class="sub">
+    Type any integer expression. Claude walks it down to a single value,
+    one operator-precedence rule at a time — parentheses, then
+    multiplication/division, then addition/subtraction — showing exactly
+    which piece collapses at each step.
+  </div>
+
+  <div class="console">
+    <span class="prompt">&gt;</span>
+    <input id="exprInput" class="mono" type="text"
+           placeholder="e.g. (8 - 3) * 4 + 15 / 3 - 2"
+           autocomplete="off" spellcheck="false" />
+    <button id="runBtn">SIMPLIFY →</button>
+  </div>
+
+  <div class="examples" id="examples">
+    <span data-ex="12 + 3 * (7 - 2) - 4">12 + 3 * (7 - 2) - 4</span>
+    <span data-ex="(20 / 4 + 3) * 2 - 6">(20 / 4 + 3) * 2 - 6</span>
+    <span data-ex="100 - 2 * (5 + 5) * 3">100 - 2 * (5 + 5) * 3</span>
+    <span data-ex="9 * 9 - 81 / 3 + 1">9 * 9 - 81 / 3 + 1</span>
+  </div>
+
+  <div id="output"></div>
+
+  <footer>reduce() · integer expressions only · AI-generated steps, always double-check for graded work</footer>
+</div>
+
+<script>
+  const input = document.getElementById('exprInput');
+  const btn = document.getElementById('runBtn');
+  const output = document.getElementById('output');
+  const examples = document.getElementById('examples');
+
+  examples.addEventListener('click', (e) => {
+    const ex = e.target.getAttribute('data-ex');
+    if (ex){ input.value = ex; run(); }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') run();
+  });
+  btn.addEventListener('click', run);
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Turn **bold-ish** markers the model uses for the changed segment into <mark>
+  function renderExpr(str){
+    const escaped = escapeHtml(str);
+    return escaped.replace(/\[\[(.+?)\]\]/g, '<mark>$1</mark>');
+  }
+
+  async function run(){
+    const expression = input.value.trim();
+    if (!expression){ input.focus(); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'THINKING…';
+    output.innerHTML = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <span>walking through operator precedence…</span>
+      </div>`;
+
+    try{
+      const steps = await simplify(expression);
+      renderLadder(expression, steps);
+    }catch(err){
+      output.innerHTML = `<div class="error-box">${escapeHtml(err.message || String(err))}</div>`;
+    }finally{
+      btn.disabled = false;
+      btn.textContent = 'SIMPLIFY →';
+    }
+  }
+
+  async function simplify(expression){
+    const system = `You are an arithmetic reduction engine for INTEGER expressions only (+, -, *, /, parentheses).
+Reduce the given expression to a single integer, one precedence-respecting step at a time (parentheses innermost-first, then * and / left-to-right, then + and - left-to-right). Integer division truncates toward zero.
+
+Return ONLY minified JSON, no prose, no markdown fences, matching exactly this shape:
+{"valid":true,"steps":[{"rule":"short rule name e.g. PARENTHESES / MULTIPLY / DIVIDE / ADD / SUBTRACT","expression":"the full expression string at this step, with the single sub-expression about to be evaluated wrapped like [[3+4]]","note":"one short plain-English sentence about what happens next"}],"result":123}
+
+Rules:
+- The FIRST step's "expression" must be the original expression exactly, with the first sub-expression to evaluate wrapped in [[ ]].
+- Each subsequent step shows the expression AFTER the previous substitution, with the NEXT sub-expression to evaluate wrapped in [[ ]].
+- The LAST step's "expression" should just be the final integer with no brackets needed, and "note" should say "final value".
+- Keep "note" under 12 words.
+- If the input is not a valid integer expression, return {"valid":false,"error":"short reason"} instead.
+- Output raw JSON only — the first character must be { and the last must be }.`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: system,
+        messages: [
+          { role: "user", content: `Expression: ${expression}` }
+        ]
+      })
+    });
+
+    if (!response.ok){
+      throw new Error("The simplifier couldn't reach Claude right now. Try again in a moment.");
+    }
+
+    const data = await response.json();
+    const textBlock = (data.content || []).find(b => b.type === "text");
+    if (!textBlock){
+      throw new Error("No response came back — try a simpler expression.");
+    }
+
+    let clean = textBlock.text.trim().replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+
+    let parsed;
+    try{
+      parsed = JSON.parse(clean);
+    }catch(e){
+      throw new Error("Couldn't parse that expression's reduction — try rephrasing it with standard +, -, *, /, and parentheses.");
+    }
+
+    if (!parsed.valid){
+      throw new Error(parsed.error || "That doesn't look like a valid integer expression.");
+    }
+    if (!Array.isArray(parsed.steps) || parsed.steps.length === 0){
+      throw new Error("Claude didn't return any reduction steps — try again.");
+    }
+    return parsed;
+  }
+
+  function renderLadder(original, parsed){
+    const steps = parsed.steps;
+    let html = `<div class="ladder">`;
+    steps.forEach((step, i) => {
+      const isFinal = i === steps.length - 1;
+      html += `
+        <div class="rung ${isFinal ? 'final' : ''}">
+          <div class="rule">${escapeHtml(step.rule || (isFinal ? 'RESULT' : 'STEP ' + (i+1)))}</div>
+          <div class="expr-card">${renderExpr(step.expression || '')}</div>
+          ${step.note ? `<div class="note">${escapeHtml(step.note)}</div>` : ''}
+          ${isFinal ? `<div class="result-badge">= ${escapeHtml(String(parsed.result))}</div>` : ''}
+        </div>`;
+    });
+    html += `</div>`;
+    output.innerHTML = html;
+  }
+</script>
+</body>
+</html>
